@@ -16,4 +16,39 @@ Makefile
 
 # Python
 __pycache__/
+# Build
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+
+# Python
+venv/
+venv_*/
+__pycache__/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+
+.DS_Store*.pyc# Build
+build/
+
+# Virtual environments
+venv*/
+*.venv
+
+# Third-party compiled code
+thirdparty/dso/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Python
+__pycache__/
 *.pyc
