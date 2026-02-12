@@ -1,54 +1,92 @@
-# Build
+# Directorios de compilación
 build/
+build_*/
+bin/
+lib/
 
-# Virtual environments
-venv*/
-*.venv
-
-# Third-party compiled code
-thirdparty/dso/
-
-# CMake
-CMakeCache.txt
+# Archivos de CMake
 CMakeFiles/
+CMakeCache.txt
 cmake_install.cmake
 Makefile
+*.cmake
+!CMakeLists.txt
+
+# Binarios y ejecutables
+*.o
+*.so
+*.a
+*.out
+*.exe
+rnn_slam
+rnn_slam_vm
+dso_dataset
 
 # Python
-__pycache__/
-# Build
-build/
-cmake-build-*/
-CMakeFiles/
-CMakeCache.txt
-
-# Python
+_pycache_/
+*.py[cod]
+*$py.class
+*.so
+.Python
 venv/
 venv_*/
-__pycache__/
+env/
+ENV/
+*.egg-info/
+dist/
+*.egg
 
-# IDEs
+# Modelos pre-entrenados (muy pesados)
+*.h5
+*.pb
+*.ckpt
+*.pth
+*.pt
+models/model-*/
+*.weights
+
+# Datasets (no subir imágenes)
+datasets/
+data/
+*.bag
+*.klg
+*.png
+*.jpg
+*.jpeg
+*.mp4
+*.avi
+
+# Archivos temporales
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.DS_Store
+
+# IDE
 .vscode/
 .idea/
+*.code-workspace
 
-# OS
+# Logs
+*.log
+log/
+logs/
 
-.DS_Store*.pyc# Build
-build/
+# Output files
+output/
+outputs/
+results/
+*.obj
+*.ply
+*.pcd
 
-# Virtual environments
-venv*/
-*.venv
+# Core dumps
+core
+core.*
 
-# Third-party compiled code
-thirdparty/dso/
-
-# CMake
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-Makefile
-
-# Python
-__pycache__/
-*.pyc
+# Thirdparty (opcional, depende si quieres subirlos)
+thirdparty/dso/build/
+thirdparty/Pangolin/build/
+thirdparty/*/build/
