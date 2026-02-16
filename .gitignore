@@ -1,0 +1,31 @@
+# Builds
+build*/
+bin/
+lib/
+
+# Python
+__pycache__/
+*.pyc
+venv*/
+*.egg-info/
+
+# Datasets
+datasets/
+data/
+*.png
+*.jpg
+*.tgz
+
+# Output
+output/
+results/
+*.obj
+*.ply
+
+# System
+*.log
+core
+.DS_Store
+*.o
+*.so
+*.a

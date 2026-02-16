@@ -455,8 +455,8 @@ int main( int argc, char** argv )
 	// hook crtl+C.
 	boost::thread exThread = boost::thread(exitThread);
 
-	if(!rnn.empty() && !rnnmodel.empty())
-		initializePythonRNN(rnn, rnnmodel);
+	//if(!rnn.empty() && !rnnmodel.empty())
+	//	initializePythonRNN(rnn, rnnmodel);
 
 	ImageFolderReader* reader = new ImageFolderReader(source,calib, gammaCalib, vignette, rnndepth);
 	reader->setGlobalCalibration();

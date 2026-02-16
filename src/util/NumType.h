@@ -27,6 +27,8 @@
 #include "Eigen/Core"
 #include "sophus/sim3.hpp"
 #include "sophus/se3.hpp"
+#include <boost/bind/bind.hpp>
+using namespace boost::placeholders;
 
 
 namespace dso

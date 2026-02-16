@@ -21,16 +21,25 @@ find_package(SuiteParse REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(Boost COMPONENTS system thread) 
 
+include_directories(/usr/local/include)
+link_directories(/usr/local/lib)
+
+add_definitions(-DHAS_ZIPLIB)
+
 # optional libraries
-find_package(LibZip QUIET)
+#find_package(LibZip QUIET)
 find_package(Pangolin 0.2 QUIET)
 find_package(OpenCV QUIET)
+find_package(OpenGL REQUIRED)
+find_package(GLEW REQUIRED)
+find_package(Boost REQUIRED COMPONENTS system thread)
 
 # flags
 add_definitions("-DENABLE_SSE")
+add_definitions(-DNO_ZIP_SUPPORT)
 set(CMAKE_CXX_FLAGS
-   "${SSE_FLAGS} -O3 -g -std=c++0x -march=native"
-#   "${SSE_FLAGS} -O3 -g -std=c++0x -fno-omit-frame-pointer"
+   "${SSE_FLAGS} -O3 -g -std=c++14 -march=native"
+#   "${SSE_FLAGS} -O3 -g -std=c++14 -fno-omit-frame-pointer"
 )
 
 if (MSVC)
@@ -68,6 +77,9 @@ include_directories(
   ${EIGEN3_INCLUDE_DIR}
 )
 include_directories(${PYTHON_INCLUDE_DIRS})
+include_directories(${Boost_INCLUDE_DIRS})
+include_directories(${OPENGL_INCLUDE_DIR})
+include_directories(${GLEW_INCLUDE_DIRS})
 
 
 # decide if we have pangolin
@@ -103,14 +115,14 @@ else ()
 endif ()
 
 # decide if we have ziplib.
-if (LIBZIP_LIBRARY)
-	message("--- found ziplib (${LIBZIP_VERSION}), compiling with zip capability.")
-	add_definitions(-DHAS_ZIPLIB=1)
-	include_directories( ${LIBZIP_INCLUDE_DIR_ZIP} ${LIBZIP_INCLUDE_DIR_ZIPCONF} ) 
-else()
-	message("--- not found ziplib (${LIBZIP_LIBRARY}), compiling without zip capability.")
-	set(LIBZIP_LIBRARY "")
-endif()
+#if (LIBZIP_LIBRARY)
+#	message("--- found ziplib (${LIBZIP_VERSION}), compiling with zip capability.")
+#	add_definitions(-DHAS_ZIPLIB=1)
+#	include_directories( ${LIBZIP_INCLUDE_DIR_ZIP} ${LIBZIP_INCLUDE_DIR_ZIPCONF} ) 
+#else()
+#	message("--- not found ziplib (${LIBZIP_LIBRARY}), compiling without zip capability.")
+#	set(LIBZIP_LIBRARY "")
+#endif()
 
 
 # compile main library.
@@ -128,13 +140,27 @@ endif()
 
 # build main executable (only if we have both OpenCV and Pangolin)
 if (OpenCV_FOUND AND Pangolin_FOUND)
-	message("--- compiling dso_dataset.")
-	add_executable(dso_dataset ${PROJECT_SOURCE_DIR}/src/main_dso_pangolin.cpp )
-	target_link_libraries(dso_dataset ${PYTHON_LIBRARIES})
-	message("${PYTHON_LIBRARIES}")
-    target_link_libraries(dso_dataset dso boost_system cxsparse ${BOOST_THREAD_LIBRARY} ${LIBZIP_LIBRARY} ${Pangolin_LIBRARIES} ${OpenCV_LIBS})
+    message("--- compiling dso_dataset.")
+    add_executable(dso_dataset ${PROJECT_SOURCE_DIR}/src/main_dso_pangolin.cpp )
+
+    target_link_libraries(dso_dataset
+        dso
+		zip
+        ${PYTHON_LIBRARIES}
+        ${OpenCV_LIBS}
+        ${Pangolin_LIBRARIES}
+        Boost::system
+        Boost::thread
+        ${CSPARSE_LIBRARY}
+        ${CHOLMOD_LIBRARY}
+        OpenGL::GL
+        GLEW::GLEW
+        pthread
+    )
+
 else()
-	message("--- not building dso_dataset, since either don't have openCV or Pangolin.")
+    message("--- not building dso_dataset, since either don't have openCV or Pangolin.")
 endif()
+
 
 set(HDF5_DISABLE_VERSION_CHECK 1)

@@ -56,7 +56,7 @@
 
 #include <cmath>
 
-#include <Python.h>
+//#include <Python.h>
 #include <fstream>
 #include <iostream>
 
@@ -227,7 +227,7 @@ void FullSystem::setGammaFunction(float* BInv)
 	if(BInv==0) return;
 
 	// copy BInv.
-	memcpy(Hcalib.Binv, BInv, sizeof(float)*256);
+	//memcpy(Hcalib.Binv, BInv, sizeof(float)*256);
 
 
 	// invert.
@@ -971,11 +971,11 @@ void FullSystem::flagPointsForRemoval()
 void FullSystem::callRNN(ImageAndExposure* image){
 	char cmd[128];
 	sprintf(cmd, "net.predict('%s')", image->path.c_str());
-	PyRun_SimpleString(cmd);
+	//PyRun_SimpleString(cmd);
 }
 
 void FullSystem::updateRNN(){
-	PyRun_SimpleString("net.update()");
+	//PyRun_SimpleString("net.update()");
 }
 
 float* FullSystem::readRNNDepth(ImageAndExposure* image, ImageFolderReader* reader, std::string rnncache){
@@ -1001,6 +1001,39 @@ void FullSystem::setupRNN(std::string folder, ImageFolderReader* r, int num){
 }
 
 float FullSystem::callAndReadRNN(ImageAndExposure* image, bool update, FrameHessian* fh){
+
+    if(reader == nullptr) {
+        return -1;   // RNN desactivado
+    }
+
+    float* pose = NULL;
+    float rnn_reprojection_error = -1;
+
+    callRNN(image);
+    if(update) updateRNN();
+
+    pose = readRNNPose(image, reader, rnncache);
+
+    if(pose == nullptr) return -1;
+
+    rnn_reprojection_error = pose[7];
+
+    if(fh != NULL){
+        float* depth = readRNNDepth(image, reader, rnncache);
+
+        if(depth != nullptr){
+            fh->shell->set_RNNcamPrediction(pose);
+            fh->makeDepths(depth);
+            delete[] depth;
+        }
+    }
+
+    delete[] pose;
+    return rnn_reprojection_error;
+}
+
+/*
+float FullSystem::callAndReadRNN(ImageAndExposure* image, bool update, FrameHessian* fh){
 	float* pose = NULL;
 	float rnn_reprojection_error = -1;
 	callRNN(image);
@@ -1018,7 +1051,7 @@ float FullSystem::callAndReadRNN(ImageAndExposure* image, bool update, FrameHess
 	delete[] pose;
 	return rnn_reprojection_error;
 }
-
+*/
 
 // [ruibinma] added additional parameters 'pose' and 'depth' which are rnn predictions
 // computed offine.
@@ -1034,7 +1067,7 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id)
 	if(bootstrapStep==0){
 		char cmd[256];
 		sprintf(cmd, "net.assign_keyframe_by_path('%s')", image->path.c_str());
-		PyRun_SimpleString(cmd);
+	//	PyRun_SimpleString(cmd);
 	}
 	if(bootstrapStep < numRNNBootstrap){
 		rnn_reprojection_error = callAndReadRNN(image, true, NULL);

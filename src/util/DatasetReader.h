@@ -294,6 +294,7 @@ private:
 			printf("ERROR: cannot read .zip archive, as compile without ziplib!\n");
 			exit(1);
 #endif
+
 		}
 	}
 
@@ -420,5 +421,6 @@ private:
 	zip_t* ziparchive;
 	char* databuffer;
 #endif
+
 };
 
