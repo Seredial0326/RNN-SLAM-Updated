@@ -39,6 +39,7 @@
 #include "util/globalCalib.h"
 #include <Eigen/SVD>
 #include <Eigen/Eigenvalues>
+#include <sophus/se3.hpp>
 #include "FullSystem/PixelSelector.h"
 #include "FullSystem/PixelSelector2.h"
 #include "FullSystem/ResidualProjections.h"
@@ -56,7 +57,7 @@
 
 #include <cmath>
 
-//#include <Python.h>
+#include <Python.h>
 #include <fstream>
 #include <iostream>
 
@@ -66,12 +67,11 @@ int FrameHessian::instanceCounter=0;
 int PointHessian::instanceCounter=0;
 int CalibHessian::instanceCounter=0;
 
-
-
 FullSystem::FullSystem()
 {
 
 	int retstat =0;
+	mesher = new RealtimeMesher();
 	if(setting_logStuff)
 	{
 
@@ -188,6 +188,12 @@ FullSystem::~FullSystem()
 {
 	blockUntilMappingIsFinished();
 
+	if(mesher)
+	{
+		std::cout << "Saving final point cloud..." << std::endl;
+		mesher->savePLY("cloud.ply");
+	}
+
 	if(setting_logStuff)
 	{
 		calibLog->close(); delete calibLog;
@@ -215,6 +221,9 @@ FullSystem::~FullSystem()
 	delete coarseInitializer;
 	delete pixelSelector;
 	delete ef;
+	delete mesher;
+
+	std::cout << "FullSystem destroyed." << std::endl;
 }
 
 void FullSystem::setOriginalCalib(const VecXf &originalCalib, int originalW, int originalH)
@@ -227,7 +236,7 @@ void FullSystem::setGammaFunction(float* BInv)
 	if(BInv==0) return;
 
 	// copy BInv.
-	//memcpy(Hcalib.Binv, BInv, sizeof(float)*256);
+	memcpy(Hcalib.Binv, BInv, sizeof(float)*256);
 
 
 	// invert.
@@ -386,6 +395,8 @@ Vec4 FullSystem::trackNewCoarse(FrameHessian* fh)
 		}
 
 		// [ruibinma] use rnn pose as some backup solutions
+
+		
 		if(fh->shell->use_rnn_pose){
 			SE3 lastF_2_fh_raw = fh->shell->RNN_cam.inverse();
 			lastF_2_fh_tries.push_back(lastF_2_fh_raw);
@@ -419,6 +430,7 @@ Vec4 FullSystem::trackNewCoarse(FrameHessian* fh)
 				lastF_2_fh_tries.push_back(lastF_2_fh_raw * SE3(Sophus::Quaterniond(1,rotDelta,rotDelta,rotDelta), Vec3(0,0,0)));	// assume constant motion.
 			}
 		}
+		
 
 
 		if(!slast->poseValid || !sprelast->poseValid || !lastF->shell->poseValid)
@@ -474,7 +486,7 @@ Vec4 FullSystem::trackNewCoarse(FrameHessian* fh)
 		// do we have a new winner?
 		if(trackingIsGood && std::isfinite((float)coarseTracker->lastResiduals[0]) && !(coarseTracker->lastResiduals[0] >=  achievedRes[0]))
 		{
-			//printf("take over. minRes %f -> %f!\n", achievedRes[0], coarseTracker->lastResiduals[0]);
+			printf("take over. minRes %f -> %f!\n", achievedRes[0], coarseTracker->lastResiduals[0]);
 			flowVecs = coarseTracker->lastFlowIndicators;
 			aff_g2l = aff_g2l_this;
 			lastF_2_fh = lastF_2_fh_this;
@@ -587,7 +599,7 @@ void FullSystem::traceNewCoarseNonKey_rnn(FrameHessian *fh) {
 				float idepth_max_project = 1.0f / ptpMax[2];
 				float idepth_rnn = 1.0f / fh->depthrnn[static_cast<int>(u_fh + v_fh * wG[0])];
 
-				printf("%f %f %f >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n", idepth_min_project, idepth_rnn, idepth_max_project);
+				//printf("%f %f %f >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n", idepth_min_project, idepth_rnn, idepth_max_project);
 
 
 				// project back
@@ -828,6 +840,26 @@ void FullSystem::activatePointsMT()
 			newpoint->host->immaturePoints[ph->idxInImmaturePoints]=0;
 			newpoint->host->pointHessians.push_back(newpoint);
 			ef->insertPoint(newpoint);
+			SE3 pose = newpoint->host->shell->camToWorld;
+
+			Eigen::Vector3d t = pose.translation();
+			Eigen::Quaterniond q = pose.so3().unit_quaternion();
+
+			double fx = Hcalib.fxl();
+			double fy = Hcalib.fyl();
+			double cx = Hcalib.cxl();
+			double cy = Hcalib.cyl();
+
+			double z = 1.0 / newpoint->idepth;
+
+			double x = (newpoint->u - cx) * z / fx;
+			double y = (newpoint->v - cy) * z / fy;
+
+			Eigen::Vector3d Pc(x,y,z);
+			Eigen::Vector3d Pw = pose * Pc;
+
+			mesher->addPoint(Pw);
+
 			for(PointFrameResidual* r : newpoint->residuals)
 				ef->insertResidual(r);
 			assert(newpoint->efPoint != 0);
@@ -971,11 +1003,15 @@ void FullSystem::flagPointsForRemoval()
 void FullSystem::callRNN(ImageAndExposure* image){
 	char cmd[128];
 	sprintf(cmd, "net.predict('%s')", image->path.c_str());
-	//PyRun_SimpleString(cmd);
+	PyGILState_STATE gstate = PyGILState_Ensure(); //nuevo
+	PyRun_SimpleString(cmd);
+	PyGILState_Release(gstate); //nuevo
 }
 
 void FullSystem::updateRNN(){
-	//PyRun_SimpleString("net.update()");
+	PyGILState_STATE gstate = PyGILState_Ensure(); //nuevo
+	PyRun_SimpleString("net.update()");
+	PyGILState_Release(gstate); //nuevo
 }
 
 float* FullSystem::readRNNDepth(ImageAndExposure* image, ImageFolderReader* reader, std::string rnncache){
@@ -999,7 +1035,7 @@ void FullSystem::setupRNN(std::string folder, ImageFolderReader* r, int num){
 	reader = r;
 	numRNNBootstrap = num;
 }
-
+/*
 float FullSystem::callAndReadRNN(ImageAndExposure* image, bool update, FrameHessian* fh){
 
     if(reader == nullptr) {
@@ -1032,26 +1068,33 @@ float FullSystem::callAndReadRNN(ImageAndExposure* image, bool update, FrameHess
     return rnn_reprojection_error;
 }
 
-/*
-float FullSystem::callAndReadRNN(ImageAndExposure* image, bool update, FrameHessian* fh){
-	float* pose = NULL;
-	float rnn_reprojection_error = -1;
-	callRNN(image);
-	if(update) updateRNN();
-	pose = readRNNPose(image, reader, rnncache);
-	rnn_reprojection_error = pose[7];
-	
-	if(fh!=NULL){
-		float* depth = NULL;
-		depth = readRNNDepth(image, reader, rnncache);
-		fh->shell->set_RNNcamPrediction(pose);
-		fh->makeDepths(depth);
-		delete[] depth;
-	}
-	delete[] pose;
-	return rnn_reprojection_error;
-}
 */
+
+float FullSystem::callAndReadRNN(ImageAndExposure* image, bool update, FrameHessian* fh){
+    if(reader == nullptr) return -1;   // RNN desactivado
+
+	callRNN(image);              // llama a la RNN
+	if(update) updateRNN();
+
+	float* pose = readRNNPose(image, reader, rnncache);
+
+    if(!pose) return -1;               // seguridad
+    float rnn_reprojection_error = pose[7];
+
+    if(fh != nullptr){
+        float* depth = readRNNDepth(image, reader, rnncache);
+        if(depth != nullptr){
+            fh->shell->set_RNNcamPrediction(pose);
+            fh->makeDepths(depth);
+            delete[] depth;
+        } else {
+            printf("Warning: RNN depth returned nullptr!\n");
+        }
+    }
+
+    delete[] pose;
+    return rnn_reprojection_error;
+}
 
 // [ruibinma] added additional parameters 'pose' and 'depth' which are rnn predictions
 // computed offine.
@@ -1063,12 +1106,16 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id)
 
 	float rnn_reprojection_error = -1;
 	// ===== Bootstrap RNN
+	printf("addActiveFrame called for id=%d, isLost=%d\n", id, isLost);
 
 	if(bootstrapStep==0){
 		char cmd[256];
 		sprintf(cmd, "net.assign_keyframe_by_path('%s')", image->path.c_str());
-	//	PyRun_SimpleString(cmd);
+		PyGILState_STATE gstate = PyGILState_Ensure(); //nuevo
+		PyRun_SimpleString(cmd);
+		PyGILState_Release(gstate); //nuevo
 	}
+	
 	if(bootstrapStep < numRNNBootstrap){
 		rnn_reprojection_error = callAndReadRNN(image, true, NULL);
 		printf("(rnn %f)  RNN bootstrapping [%d/%d]\n", rnn_reprojection_error, bootstrapStep+1, numRNNBootstrap);
@@ -1076,6 +1123,7 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id)
 		lock.unlock();
 		return;
 	}
+	
 	if(bootstrapStep == 0) bootstrapStep++;
 
 
@@ -1094,9 +1142,36 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id)
 	fh->ab_exposure = image->exposure_time;
     fh->makeImages(image->image, &Hcalib);
 
+	// Número de puntos activos en este frame
+	int numActive = fh->pointHessians.size();
+
+	// Si quieres verificar la profundidad RNN (suponiendo que ya se llamó a readRNNDepth)
+	// Llamas a readRNNDepth
+	float* depthRNN = readRNNDepth(image, reader, rnncache);
+	if(depthRNN != nullptr){
+		int depthSize = wG[0] * hG[0]; // o el tamaño que tenga tu imagen
+		float minD = depthRNN[0];
+		float maxD = depthRNN[0];
+		bool hasNan = false;
+
+		for(int i=0; i<depthSize; i++){
+			float val = depthRNN[i];
+			if(!std::isfinite(val)) hasNan = true;
+			if(val < minD) minD = val;
+			if(val > maxD) maxD = val;
+		}
+
+		printf("Depth RNN: min=%f max=%f hasNan=%d\n", minD, maxD, hasNan);
+
+		// Si quieres guardar en el FrameHessian para usar después
+		fh->makeDepths(depthRNN); // como en tu callAndReadRNN
+	}
+	delete[] depthRNN;
+
 	if(!initialized)
 	{
 		// Run RNN prediction first
+		printf("System not initialized yet.\n");
 		rnn_reprojection_error = callAndReadRNN(image, true, fh);
 		printf("(rnn %f)  \n", rnn_reprojection_error);
 		if(rnn_reprojection_error >= 0.2){
@@ -1206,6 +1281,22 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id)
 		return;
 	}
 }
+
+/*
+void FullSystem::onNewFrame(FrameHessian* fh) {
+    if(mesher)
+	{
+		Sophus::SE3d T = fh->shell->camToWorld;
+
+		Eigen::Vector3d t = T.translation();
+		Eigen::Quaterniond q(T.rotationMatrix());
+
+		mesher->integrate(fh->shell->timestamp, t, q);
+	}
+
+}
+*/
+
 void FullSystem::deliverTrackedFrame(FrameHessian* fh, bool needKF)
 {
 
@@ -1339,7 +1430,7 @@ void FullSystem::makeNonKeyFrame( FrameHessian* fh)
 		fh->setEvalPT_scaled(fh->shell->camToWorld.inverse(),fh->shell->aff_g2l);
 	}
 
-	// traceNewCoarseNonKey_rnn(fh);
+	traceNewCoarseNonKey_rnn(fh);
 	traceNewCoarse(fh);
 	delete fh;
 }
@@ -1484,6 +1575,41 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
 			{marginalizeFrame(frameHessians[i]); i=0;}
 
 
+	// === REALTIME EXPORT HOOK ===
+	{
+		double timestamp = fh->shell->timestamp;
+		SE3 pose = fh->shell->camToWorld;
+
+		Eigen::Vector3d t = pose.translation();
+		Eigen::Quaterniond q = pose.so3().unit_quaternion();
+
+		std::cout << "Active points in frame: " 
+          << fh->pointHessians.size() << std::endl;
+
+		for(PointHessian* ph : fh->pointHessians)
+		{
+			if(ph->idepth <= 0) continue;
+
+			double z = 1.0 / ph->idepth;
+
+			double fx = Hcalib.fxl();
+			double fy = Hcalib.fyl();
+			double cx = Hcalib.cxl();
+			double cy = Hcalib.cyl();
+
+			double x = (ph->u - cx) * z / fx;
+			double y = (ph->v - cy) * z / fy;
+
+			if(z < 0.1 || z > 5.0) continue;
+
+			Eigen::Vector3d Pc(x,y,z);
+			Eigen::Vector3d Pw = pose * Pc;
+
+			//mesher->addPoint(Pw);
+		}
+
+		mesher->integrate(timestamp, t, q);
+	}
 
 	printLogLine();
     //printEigenValLine();

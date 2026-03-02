@@ -38,6 +38,7 @@
 #include "FullSystem/HessianBlocks.h"
 #include "util/FrameShell.h"
 #include "util/IndexThreadReduce.h"
+#include "Meshing/RealtimeMesher.h"
 #include "OptimizationBackend/EnergyFunctional.h"
 #include "FullSystem/PixelSelector2.h"
 
@@ -127,9 +128,12 @@ inline bool eigenTestNan(const MatXX &m, std::string msg)
 	return foundNan;
 }
 
-
-
-
+/*
+struct PointCloudMesher {
+    std::vector<Eigen::Vector3f> points;
+    void integrate(const Matrix4f& T, const cv::Mat& depth);
+};
+*/
 
 class FullSystem {
 public:
@@ -152,6 +156,7 @@ public:
 	bool useRNN;
 	std::string rnncache;
 	ImageFolderReader* reader;
+	RealtimeMesher* mesher; //new mesher
 	void setupRNN(std::string folder, ImageFolderReader* r, int num);
 
 	// marginalizes a frame. drops / marginalizes points & residuals.
@@ -165,6 +170,8 @@ public:
 	void debugPlot(std::string name);
 
 	void printFrameLifetimes();
+
+	void onNewFrame(FrameHessian* fh);
 	// contains pointers to active frames
 
     std::vector<IOWrap::Output3DWrapper*> outputWrapper;

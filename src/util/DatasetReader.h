@@ -348,7 +348,7 @@ private:
 
 			int id;
 			double stamp;
-			float exposure = 0;
+			float exposure = 1.0f;
 
 			if(3 == sscanf(buf, "%d %lf %f", &id, &stamp, &exposure))
 			{
@@ -392,8 +392,10 @@ private:
 
 		if((int)getNumImages() != (int)exposures.size() || !exposuresGood)
 		{
-			printf("set EXPOSURES to zero!\n");
+			printf("set EXPOSURES to zeros!\n");
+			//printf("set EXPOSURES to 1.0f\n");
 			exposures.clear();
+			//exposures.resize(getNumImages(), 1.0f);
 		}
 
 		printf("got %d images and %d timestamps and %d exposures.!\n", (int)getNumImages(), (int)timestamps.size(), (int)exposures.size());

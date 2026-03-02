@@ -415,7 +415,7 @@ void parseArgument(char* arg)
 	printf("could not parse argument \"%s\"!!!!\n", arg);
 }
 
-
+/*
 void initializePythonRNN(std::string rnn, std::string rnnmodel){
 	Py_Initialize();
 	PyRun_SimpleString("import sys");
@@ -444,7 +444,43 @@ void initializePythonRNN(std::string rnn, std::string rnnmodel){
 	sprintf(cmd, "os.makedirs('%s')", depth_dir.c_str());
 	PyRun_SimpleString(cmd);
 }
+*/
 
+static PyThreadState* mainThreadState = nullptr;
+
+void initializePythonRNN(std::string rnn, std::string rnnmodel)
+{
+    Py_Initialize();
+
+    // Inicializa soporte multi-thread (ok aunque esté deprecated)
+    PyEval_InitThreads();
+	printf("INIT PYTHON\n");
+
+    // 🔥 NO usar PyGILState_Ensure aquí
+    // El hilo principal ya tiene el GIL
+
+    PyRun_SimpleString("import sys");
+    PyRun_SimpleString("print(sys.version)");
+
+    char cmd[512];
+
+    sprintf(cmd, "sys.path.append('%s')", rnn.c_str());
+    PyRun_SimpleString(cmd);
+
+    PyRun_SimpleString("import RNN_pred_colon_reproj");
+
+    sprintf(cmd,
+        "net = RNN_pred_colon_reproj.RNN_depth_pred('%s', output_dir='%s')",
+        rnnmodel.c_str(),
+        depth_dir.c_str());
+
+    PyRun_SimpleString(cmd);
+
+    // 🔥 ESTA ES LA LÍNEA CRÍTICA
+    mainThreadState = PyEval_SaveThread();  // libera el GIL
+
+    printf("Python RNN predictor initialized!\n");
+}
 
 int main( int argc, char** argv )
 {
@@ -455,8 +491,8 @@ int main( int argc, char** argv )
 	// hook crtl+C.
 	boost::thread exThread = boost::thread(exitThread);
 
-	//if(!rnn.empty() && !rnnmodel.empty())
-	//	initializePythonRNN(rnn, rnnmodel);
+	if(!rnn.empty() && !rnnmodel.empty())
+		initializePythonRNN(rnn, rnnmodel);
 
 	ImageFolderReader* reader = new ImageFolderReader(source,calib, gammaCalib, vignette, rnndepth);
 	reader->setGlobalCalibration();
@@ -567,10 +603,15 @@ int main( int argc, char** argv )
 
 
             ImageAndExposure* img;
-            if(preload)
-                img = preloadedImages[ii];
-            else
-                img = reader->getImage(i);
+			if(preload)
+				img = preloadedImages[ii];
+			else
+				img = reader->getImage(i);
+
+			if(!img){
+				printf("Frame %d no se cargó correctamente!\n", i);
+				continue;
+			}
 
 
 
@@ -588,8 +629,6 @@ int main( int argc, char** argv )
                     skipFrame=true;
                 }
             }
-
-
 
             if(!skipFrame){
 				try{

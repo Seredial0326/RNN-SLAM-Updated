@@ -29,3 +29,13 @@ core
 *.o
 *.so
 *.a
+
+# model weights
+*.data-*
+*.index
+*.meta
+*.pb
+
+# logs
+*.txt
+out/
